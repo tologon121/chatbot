@@ -55,12 +55,22 @@ export default function RegisterPage() {
 
       setSuccess("Аккаунт успешно создан! Выполняется вход...");
 
-      // 2. Выполняем авто-вход через NextAuth Credentials
-      const loginRes = await signIn("credentials", {
+      // 2. Выполняем авто-вход через NextAuth Credentials с повторной попыткой при микрозадержке БД
+      let loginRes = await signIn("credentials", {
         email,
         password,
         redirect: false,
       });
+
+      if (loginRes?.error) {
+        // Делаем паузу 1 секунду для завершения транзакции в БД Supabase и пробуем снова
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        loginRes = await signIn("credentials", {
+          email,
+          password,
+          redirect: false,
+        });
+      }
 
       if (loginRes?.error) {
         throw new Error("Регистрация успешна, но автоматический вход не удался. Войдите вручную.");
