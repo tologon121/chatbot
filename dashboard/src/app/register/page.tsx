@@ -5,12 +5,22 @@ import Navbar from "@/components/Navbar";
 import { useLanguage } from "@/components/LanguageContext";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function RegisterPage() {
   const { t } = useLanguage();
   const { data: session, status } = useSession();
   const router = useRouter();
+
+  // Состояния для формы
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  
+  // Состояния статуса
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -18,12 +28,59 @@ export default function RegisterPage() {
     }
   }, [status, router]);
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !email || !password) {
+      setError("Пожалуйста, заполните все поля.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      // 1. Отправляем запрос на регистрацию на наш API
+      const res = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Не удалось создать аккаунт.");
+      }
+
+      setSuccess("Аккаунт успешно создан! Выполняется вход...");
+
+      // 2. Выполняем авто-вход через NextAuth Credentials
+      const loginRes = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (loginRes?.error) {
+        throw new Error("Регистрация успешна, но автоматический вход не удался. Войдите вручную.");
+      }
+
+      router.push("/dashboard");
+
+    } catch (err: any) {
+      console.error("Signup error:", err);
+      setError(err.message || "Произошла непредвиденная ошибка.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[var(--background)] overflow-hidden transition-colors duration-300 flex flex-col">
       <Navbar />
 
       <main className="flex-1 flex items-center justify-center p-6 relative pt-24">
-        {/* Background glows */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-500/10 dark:bg-purple-500/10 rounded-full blur-3xl -z-10"></div>
 
         <div className="w-full max-w-md glass-panel p-10 rounded-3xl shadow-2xl border border-[var(--border)] fade-in-up relative z-10">
@@ -33,13 +90,15 @@ export default function RegisterPage() {
             <p className="text-[var(--foreground)]/60 text-sm">{t.authPage.registerDesc}</p>
           </div>
 
-          <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
               <label className="block text-sm font-semibold text-[var(--foreground)]/80 mb-2">{t.authPage.name}</label>
               <input 
                 type="text" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 className="w-full px-4 py-3 border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 bg-[var(--surface)] transition-all"
-                placeholder="John Doe"
+                placeholder="Иван Иванов"
                 required
               />
             </div>
@@ -48,6 +107,8 @@ export default function RegisterPage() {
               <label className="block text-sm font-semibold text-[var(--foreground)]/80 mb-2">{t.authPage.email}</label>
               <input 
                 type="email" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 bg-[var(--surface)] transition-all"
                 placeholder="name@company.com"
                 required
@@ -58,14 +119,39 @@ export default function RegisterPage() {
               <label className="block text-sm font-semibold text-[var(--foreground)]/80 mb-2">{t.authPage.password}</label>
               <input 
                 type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-3 border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 bg-[var(--surface)] transition-all"
                 placeholder="••••••••"
                 required
               />
             </div>
 
-            <button className="w-full py-3 mt-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-sm shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:-translate-y-0.5 transition-all duration-300">
-              {t.authPage.registerBtn}
+            {error && (
+              <div className="bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 rounded-xl p-3 text-xs font-semibold animate-fade-in">
+                ⚠️ {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-xl p-3 text-xs font-semibold animate-fade-in">
+                ✅ {success}
+              </div>
+            )}
+
+            <button 
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 mt-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-sm shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer border-none"
+            >
+              {loading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  Создание аккаунта...
+                </>
+              ) : (
+                t.authPage.registerBtn
+              )}
             </button>
           </form>
 

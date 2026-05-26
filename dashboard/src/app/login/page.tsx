@@ -5,12 +5,20 @@ import Navbar from "@/components/Navbar";
 import { useLanguage } from "@/components/LanguageContext";
 import { signIn, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function LoginPage() {
   const { t } = useLanguage();
   const { data: session, status } = useSession();
   const router = useRouter();
+
+  // Состояния формы
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  // Состояния статуса
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -18,12 +26,47 @@ export default function LoginPage() {
     }
   }, [status, router]);
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setError("Пожалуйста, заполните все поля.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      // Вызываем стандартный signIn NextAuth с провайдером credentials
+      const res = await signIn("credentials", {
+        email,
+        password,
+        redirect: false, // Отключаем автоматический редирект для перехвата ошибок
+      });
+
+      if (res?.error) {
+        // Выводим ошибку, полученную из CredentialsProvider authorize
+        throw new Error(res.error || "Неверный e-mail или пароль.");
+      }
+
+      // Если ошибок нет, перенаправляем в личный кабинет
+      router.push("/dashboard");
+
+    } catch (err: any) {
+      console.error("Login error:", err);
+      // Убираем технические детали, оставляя только понятное сообщение
+      const cleanMsg = err.message.replace("CredentialsSignin", "Неверный e-mail или пароль.");
+      setError(cleanMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[var(--background)] overflow-hidden transition-colors duration-300 flex flex-col">
       <Navbar />
 
       <main className="flex-1 flex items-center justify-center p-6 relative pt-24">
-        {/* Background glows */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-500/10 dark:bg-indigo-500/10 rounded-full blur-3xl -z-10"></div>
 
         <div className="w-full max-w-md glass-panel p-10 rounded-3xl shadow-2xl border border-[var(--border)] fade-in-up relative z-10">
@@ -33,11 +76,13 @@ export default function LoginPage() {
             <p className="text-[var(--foreground)]/60 text-sm">{t.authPage.loginDesc}</p>
           </div>
 
-          <form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
+          <form className="space-y-5" onSubmit={handleSubmit}>
             <div>
               <label className="block text-sm font-semibold text-[var(--foreground)]/80 mb-2">{t.authPage.email}</label>
               <input 
                 type="email" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-4 py-3 border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-[var(--surface)] transition-all"
                 placeholder="name@company.com"
                 required
@@ -51,14 +96,33 @@ export default function LoginPage() {
               </div>
               <input 
                 type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-3 border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-[var(--surface)] transition-all"
                 placeholder="••••••••"
                 required
               />
             </div>
 
-            <button className="w-full py-3 mt-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-sm shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:-translate-y-0.5 transition-all duration-300">
-              {t.authPage.loginBtn}
+            {error && (
+              <div className="bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 rounded-xl p-3 text-xs font-semibold animate-fade-in">
+                ⚠️ {error}
+              </div>
+            )}
+
+            <button 
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 mt-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-sm shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer border-none"
+            >
+              {loading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  Вход в систему...
+                </>
+              ) : (
+                t.authPage.loginBtn
+              )}
             </button>
           </form>
 
