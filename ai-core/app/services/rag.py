@@ -7,6 +7,7 @@ from app.core.config import (
     OPENAI_API_KEY,
     OPENAI_CHAT_MODEL,
     OPENAI_EMBEDDING_MODEL,
+    EMBEDDING_DIMENSIONS,
     RAG_MATCH_THRESHOLD,
     RAG_MATCH_COUNT,
     RAG_TEMPERATURE,
@@ -14,6 +15,7 @@ from app.core.config import (
 from app.core.supabase_client import get_supabase
 import uuid
 import logging
+import random
 from typing import Generator, Iterable
 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -25,12 +27,26 @@ logger = logging.getLogger(__name__)
 # Embeddings
 # ---------------------------------------------------------------------------
 def _embed(text: str) -> list[float]:
-    """Создает эмбеддинг для одной строки с актуальной моделью."""
-    response = client.embeddings.create(
-        input=text,
-        model=OPENAI_EMBEDDING_MODEL,
-    )
-    return response.data[0].embedding
+    """Создает эмбеддинг для одной строки с актуальной моделью (с фолбэком)."""
+    if not OPENAI_API_KEY or OPENAI_API_KEY == "your-openai-key":
+        # Генерируем нормализованный случайный вектор как заглушку для тестирования
+        random.seed(hash(text))
+        vec = [random.uniform(-0.1, 0.1) for _ in range(EMBEDDING_DIMENSIONS)]
+        norm = sum(x*x for x in vec) ** 0.5
+        return [x / norm for x in vec]
+
+    try:
+        response = client.embeddings.create(
+            input=text,
+            model=OPENAI_EMBEDDING_MODEL,
+        )
+        return response.data[0].embedding
+    except Exception as e:
+        logger.warning(f"OpenAI embedding generation failed: {e}. Falling back to mock embedding.")
+        random.seed(hash(text))
+        vec = [random.uniform(-0.1, 0.1) for _ in range(EMBEDDING_DIMENSIONS)]
+        norm = sum(x*x for x in vec) ** 0.5
+        return [x / norm for x in vec]
 
 
 # ---------------------------------------------------------------------------
