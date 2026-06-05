@@ -1,9 +1,11 @@
 /**
  * Thin client over the AI Core REST API.
- * Configure with NEXT_PUBLIC_API_URL (defaults to http://localhost:8000).
+ *
+ * By default, all routes live inside the Next.js app itself (relative URL).
+ * Set NEXT_PUBLIC_API_URL only if you want to point the dashboard at a
+ * separately hosted FastAPI ai-core deployment.
  */
-const RAW_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const RAW_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 export const API_BASE = RAW_BASE.replace(/\/$/, "");
 
 export type Widget = {

@@ -145,33 +145,50 @@ S3, Vercel static, etc.) и используется в скрипт-теге.
 - ✅ ANN-индекс pgvector (ivfflat) для быстрого поиска
 - ✅ Persona / brand voice в системном промте
 
-## Что добавлено в v1.2
+## Что добавлено в v1.3 (single-deploy mode)
 
-- ✅ **Widget ID теперь text, не uuid** — гибкие идентификаторы (`wk_xxx`,
-   `usr_xxx`, …) и совместимость со старыми вшитыми ID. Если у вас была
-   старая схема — запустите `ai-core/migration.sql`.
-- ✅ **Seed-данные** в `database.sql`: 3 готовых виджета (`wk_demo`,
-   `usr_osh_tour_2026`, `wk_1a2b3c4d5e`) — база работает сразу после `\i database.sql`.
-- ✅ **CRUD-API для виджетов**: `/api/v1/widgets/` (create/list/get/update/delete).
-- ✅ **Dashboard: глобальный widget-picker** — все страницы (Knowledge Base,
-   Widget Settings, Integration) работают с активным виджетом. На странице
-   настроек кнопка «Сохранить» реально пишет в БД.
-- ✅ **Дашборд: рабочий sign-out** и user pill с email/именем.
-- ✅ **Improved mock Supabase**: in-memory store с insert/select/update/delete,
-   фильтрами и mock RPC — позволяет полностью локально тестировать KB-флоу
-   без живого Supabase.
-- ✅ **/api/chat fallback**: если ai-core недоступен И OpenAI ключ не задан,
-   возвращается дружелюбная демо-заглушка вместо ошибки 500.
-- ✅ **/api/v1/chat/session auto-bootstrap**: `/api/chat` сам создает сессию
-   при первом обращении (раньше нужно было дергать /chat/session вручную).
+**Ai-core больше не нужен для запуска.** Вся серверная логика (widgets, chat
+с RAG, ingest, leads, analytics) портирована в Next.js Route Handlers под
+`/api/v1/*` — деплоится одним проектом на Vercel.
 
-### Быстрый старт (после обновления)
+- ✅ **13 Route Handlers** в `dashboard/src/app/api/v1/*` — полная замена
+   FastAPI.
+- ✅ **Single deploy**: один `git push` → Vercel поднимает фронт+бэк.
+   Render/Fly/ngrok больше не нужны.
+- ✅ **In-memory mock store** с seed-данными — работает без Supabase
+   (для демо). Чтобы данные сохранялись — задайте `SUPABASE_SERVICE_ROLE_KEY`
+   (JWT формат `eyJ...`) и накатите `ai-core/database.sql` в Supabase.
+- ✅ **Without OpenAI key** — RAG ищет реальные чанки, ответ — friendly
+   шаблон с извлечённым контекстом. С ключом — полноценный GPT-4o-mini.
+- ✅ **Widget ID теперь text** — гибкие ID (`wk_xxx`, `usr_xxx`, …).
+- ✅ **Auth middleware** защищает `/dashboard/*`, реальная аналитика
+   (`/api/v1/analytics/overview`), страницы лидов и диалогов.
 
-1. Запустите `database.sql` в Supabase SQL Editor (если нужно мигрировать —
-   `migration.sql`).
-2. В `.env` (ai-core) укажите **JWT** Supabase ключ (anon или service_role).
-   Префиксные ключи вида `sb_publishable_xxx` не подходят для Python SDK.
-3. `uvicorn main:app --reload` — бэкенд на 8000.
-4. В `dashboard/.env` задайте `NEXT_PUBLIC_API_URL=http://localhost:8000`.
-5. `npm run dev` — дашборд на 3000. На странице Knowledge Base увидите
-   список виджетов — выберите любой и грузите документы.
+### Быстрый старт
+
+```bash
+cd dashboard
+npm install
+npm run dev          # http://localhost:3000
+```
+
+Всё работает без дополнительных сервисов. Демо отвечает по предзаряженной
+базе знаний Nexus AI.
+
+### Прод-деплой
+
+1. `git push` → Vercel auto-deploy.
+2. В Vercel → Settings → Environment Variables задайте (опционально):
+   - `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` — чтобы данные жили
+     между cold-start'ами
+   - `OPENAI_API_KEY` — для настоящих ответов вместо demo-шаблона
+   - `NEXTAUTH_URL` = ваш Vercel домен, `NEXTAUTH_SECRET` = любая
+     длинная строка
+3. (Опц.) Если задаёте Supabase — выполните `ai-core/database.sql` в SQL Editor.
+
+### Self-hosted режим с FastAPI
+
+`ai-core/` остаётся в репо для тех, кому нужен Python-бэкенд (например,
+для тяжёлого PDF-парсинга через `pypdf`). В Vercel задайте
+`NEXT_PUBLIC_API_URL=https://your-ai-core.example.com` — дашборд будет
+обращаться к нему вместо встроенных Next.js routes.
