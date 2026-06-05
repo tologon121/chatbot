@@ -1,18 +1,35 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useWidget } from "@/components/WidgetContext";
 
 type Framework = "html" | "react" | "nextjs" | "wordpress" | "vue";
 
 export default function IntegrationPage() {
-  const [widgetId, setWidgetId] = useState("wk_1a2b3c4d5e");
-  const [apiUrl, setApiUrl] = useState("https://api.nexusai.example.com");
-  const [color, setColor] = useState("#4f46e5");
-  const [lang, setLang] = useState<"RU" | "EN" | "KG">("RU");
-  const [position, setPosition] = useState<"bottom-right" | "bottom-left">("bottom-right");
-  const [leadMode, setLeadMode] = useState(true);
-  const [greeting, setGreeting] = useState("");
+  const { current } = useWidget();
+  const [widgetId, setWidgetId] = useState(current?.id || "wk_1a2b3c4d5e");
+  const [apiUrl, setApiUrl] = useState(
+    process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
+  );
+  const [color, setColor] = useState(current?.color || "#4f46e5");
+  const [lang, setLang] = useState<"RU" | "EN" | "KG">((current?.language as any) || "RU");
+  const [position, setPosition] = useState<"bottom-right" | "bottom-left">(
+    (current?.position as any) || "bottom-right",
+  );
+  const [leadMode, setLeadMode] = useState(current?.leadMode ?? true);
+  const [greeting, setGreeting] = useState(current?.greeting || "");
   const [framework, setFramework] = useState<Framework>("html");
+
+  // sync to active widget changes
+  useEffect(() => {
+    if (!current) return;
+    setWidgetId(current.id);
+    setColor(current.color || "#4f46e5");
+    setLang((current.language as any) || "RU");
+    setPosition((current.position as any) || "bottom-right");
+    setLeadMode(current.leadMode);
+    setGreeting(current.greeting || "");
+  }, [current?.id]);
 
   const widgetCdn = "https://cdn.nexusai.example.com/widget.iife.js";
 

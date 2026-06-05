@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import chat, ingest, leads
+from app.api import chat, ingest, leads, widgets
 from app.core.config import ALLOWED_ORIGINS, APP_VERSION
 
 logging.basicConfig(
@@ -81,6 +81,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 app.include_router(ingest.router, prefix="/api/v1/ingest", tags=["Ingest"])
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["Chat"])
 app.include_router(leads.router, prefix="/api/v1/leads", tags=["Leads"])
+app.include_router(widgets.router, prefix="/api/v1/widgets", tags=["Widgets"])
 
 
 @app.get("/")

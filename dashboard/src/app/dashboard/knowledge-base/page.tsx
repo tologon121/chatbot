@@ -1,14 +1,23 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useLanguage } from "@/components/LanguageContext";
+import { useWidget } from "@/components/WidgetContext";
+import {
+  DocumentRow,
+  deleteDocument as apiDeleteDocument,
+  listDocuments,
+  uploadFile,
+  uploadText,
+} from "@/lib/api";
 
 export default function KnowledgeBase() {
   const { t } = useLanguage();
+  const { current: widget, currentId, loading: widgetsLoading } = useWidget();
   const [dragActive, setDragActive] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   // Состояния для редактора прямого текста
   const [title, setTitle] = useState("");
   const [textContent, setTextContent] = useState("");
@@ -20,47 +29,42 @@ export default function KnowledgeBase() {
   const [uploadError, setUploadError] = useState("");
 
   // Состояния для списка документов
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
 
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
+    if (!currentId) {
+      setDocuments([]);
+      return;
+    }
     try {
       setLoadingDocs(true);
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      // Используем дефолтный виджет "usr_osh_tour_2026"
-      const response = await fetch(`${apiBaseUrl}/api/v1/ingest/documents/usr_osh_tour_2026`);
-      if (response.ok) {
-        const data = await response.json();
-        // Сортируем: новые сверху
-        const sortedData = data.sort((a: any, b: any) => 
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-        setDocuments(sortedData);
-      }
+      const data = await listDocuments(currentId);
+      const sortedData = [...data].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+      setDocuments(sortedData);
     } catch (err) {
-      console.error("Failed to fetch documents from Supabase backend:", err);
+      console.error("Failed to fetch documents:", err);
     } finally {
       setLoadingDocs(false);
     }
-  };
+  }, [currentId]);
 
   // Первичная загрузка и периодический опрос для обновления статусов PROCESSING
   useEffect(() => {
     fetchDocuments();
 
     const interval = setInterval(() => {
-      // Опрашиваем только если есть документы, которые всё еще обрабатываются
-      setDocuments(prev => {
-        const hasProcessing = prev.some(doc => doc.status === "PROCESSING");
-        if (hasProcessing) {
-          fetchDocuments();
-        }
+      setDocuments((prev) => {
+        const hasProcessing = prev.some((doc) => doc.status === "PROCESSING");
+        if (hasProcessing) fetchDocuments();
         return prev;
       });
     }, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchDocuments]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -123,6 +127,11 @@ export default function KnowledgeBase() {
   // Отправка сырого текста на бэкенд
   const handleTrainAI = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentId) {
+      setStatus("error");
+      setErrorMessage("Сначала создайте или выберите виджет в шапке.");
+      return;
+    }
     if (!title.trim() || !textContent.trim()) {
       setStatus("error");
       setErrorMessage("Пожалуйста, заполните название документа и текст.");
@@ -133,95 +142,68 @@ export default function KnowledgeBase() {
     setErrorMessage("");
 
     try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const response = await fetch(`${apiBaseUrl}/api/v1/ingest/upload-text`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          widget_id: "usr_osh_tour_2026",
-          title: title,
-          text_content: textContent,
-        }),
-      });
-
-      if (response.ok) {
-        setStatus("success");
-        setTitle("");
-        setTextContent("");
-        fetchDocuments(); // Обновляем список сразу
-        setTimeout(() => setStatus("idle"), 5000);
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Произошла ошибка при обучении.");
-      }
+      await uploadText(currentId, title, textContent);
+      setStatus("success");
+      setTitle("");
+      setTextContent("");
+      fetchDocuments();
+      setTimeout(() => setStatus("idle"), 5000);
     } catch (err: any) {
       console.error("Ingest error:", err);
       setStatus("error");
-      setErrorMessage(err.message || "Не удалось соединиться с сервером обучения. Убедитесь, что бэкенд на порту 8000 запущен.");
+      setErrorMessage(
+        err.message ||
+          "Не удалось соединиться с сервером обучения. Убедитесь, что бэкенд на порту 8000 запущен.",
+      );
     }
   };
 
   // Загрузка бинарных файлов (PDF, DOCX, TXT) через FormData
   const handleTrainFiles = async () => {
+    if (!currentId) {
+      setUploadStatus("error");
+      setUploadError("Сначала создайте или выберите виджет в шапке.");
+      return;
+    }
     if (files.length === 0) return;
-    
+
     setUploadStatus("loading");
     setUploadError("");
 
     try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-      // Отправляем файлы по очереди
       for (const file of files) {
-        const formData = new FormData();
-        formData.append("widget_id", "usr_osh_tour_2026");
-        formData.append("file", file);
-
-        const response = await fetch(`${apiBaseUrl}/api/v1/ingest/upload-file`, {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.detail || `Не удалось загрузить файл ${file.name}`);
-        }
+        await uploadFile(currentId, file);
       }
-
       setUploadStatus("success");
-      setFiles([]); // Очищаем список очереди
-      fetchDocuments(); // Обновляем список файлов
+      setFiles([]);
+      fetchDocuments();
       setTimeout(() => setUploadStatus("idle"), 5000);
     } catch (err: any) {
       console.error("File upload error:", err);
       setUploadStatus("error");
-      setUploadError(err.message || "Не удалось загрузить файлы. Поддерживаются TXT, PDF, DOCX файлы до 10MB.");
+      setUploadError(
+        err.message ||
+          "Не удалось загрузить файлы. Поддерживаются TXT, PDF, DOCX файлы до 10MB.",
+      );
     }
   };
 
   // Удаление документа из Supabase
   const handleDeleteDocument = async (docId: string, docTitle: string) => {
-    if (!confirm(`Вы действительно хотите удалить документ "${docTitle}"? Все связанные векторные чанки будут навсегда стерты из базы Supabase.`)) {
+    if (
+      !confirm(
+        `Вы действительно хотите удалить документ "${docTitle}"? Все связанные векторные чанки будут навсегда стерты.`,
+      )
+    ) {
       return;
     }
 
     try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const response = await fetch(`${apiBaseUrl}/api/v1/ingest/documents/${docId}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        setDocuments(prev => prev.filter(doc => doc.id !== docId));
-      } else {
-        const errData = await response.json();
-        alert(errData.detail || "Не удалось удалить документ.");
-      }
-    } catch (err) {
+      await apiDeleteDocument(docId);
+      setDocuments((prev) => prev.filter((doc) => doc.id !== docId));
+    } catch (err: any) {
       console.error("Error deleting document:", err);
-      alert("Произошла ошибка при соединении с сервером.");
+      alert(err.message || "Не удалось удалить документ.");
     }
   };
 
@@ -230,6 +212,17 @@ export default function KnowledgeBase() {
       <header className="mb-10">
         <h2 className="text-3xl font-bold tracking-tight">{t.knowledgeBase.title}</h2>
         <p className="text-[var(--foreground)]/60 mt-2 text-sm">{t.knowledgeBase.desc}</p>
+        {widget && (
+          <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-700 dark:text-indigo-300">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+            Документы сохраняются в виджет <strong className="font-mono">{widget.id}</strong> ({widget.name})
+          </div>
+        )}
+        {!widget && !widgetsLoading && (
+          <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-300">
+            ⚠️ Нет ни одного виджета. Создайте его в правом верхнем углу, чтобы начать обучение.
+          </div>
+        )}
       </header>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-10 mb-10">

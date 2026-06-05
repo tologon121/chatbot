@@ -1,12 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { signOut, useSession } from "next-auth/react";
 import { useLanguage } from "@/components/LanguageContext";
 
 export default function Sidebar() {
   const { lang, setLang, t, theme, toggleTheme } = useLanguage();
   const pathname = usePathname();
+  const router = useRouter();
+  const { data: session } = useSession();
+
+  const handleSignOut = async () => {
+    await signOut({ redirect: false });
+    router.push("/login");
+  };
 
   const isActive = (href: string) =>
     href === "/dashboard"
@@ -104,8 +112,21 @@ export default function Sidebar() {
           )}
         </button>
 
+        {/* User pill (if signed in) */}
+        {session?.user && (
+          <div className="px-3 py-2 text-[11px] text-[var(--foreground-faint)] truncate"
+               title={session.user.email || ""}>
+            <span className="font-semibold text-[var(--foreground-muted)]">
+              {session.user.name || session.user.email}
+            </span>
+          </div>
+        )}
+
         {/* Sign out */}
-        <button className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-[13px] font-semibold rounded-lg text-[var(--foreground-muted)] hover:text-red-500 hover:bg-red-500/5 transition-all">
+        <button
+          onClick={handleSignOut}
+          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-[13px] font-semibold rounded-lg text-[var(--foreground-muted)] hover:text-red-500 hover:bg-red-500/5 transition-all cursor-pointer border-none bg-transparent"
+        >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
           {t.sidebar.signOut}
         </button>
