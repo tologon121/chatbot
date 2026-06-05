@@ -140,3 +140,80 @@ export const deleteDocument = (id: string) =>
     `/api/v1/ingest/documents/${encodeURIComponent(id)}`,
     { method: "DELETE" },
   );
+
+// ---------------- Analytics ----------------
+export type AnalyticsOverview = {
+  widget_id: string;
+  totals: {
+    conversations: number;
+    leads: number;
+    messages: number;
+    avg_resolution_sec: number;
+  };
+  chart_7d: { date: string; weekday: string; count: number }[];
+  sentiment: {
+    positive_pct: number;
+    neutral_pct: number;
+    negative_pct: number;
+    sample_size: number;
+  };
+  top_intents: { label: string; count: number }[];
+  languages: { code: string; pct: number }[];
+  recent_leads: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    createdAt: string;
+  }[];
+};
+
+export const getAnalytics = (widgetId: string) =>
+  apiFetch<AnalyticsOverview>(
+    `/api/v1/analytics/overview/${encodeURIComponent(widgetId)}`,
+  );
+
+// ---------------- Leads ----------------
+export type Lead = {
+  id: string;
+  widgetId: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  context: string | null;
+  isSent: boolean;
+  createdAt: string;
+};
+
+export const listLeads = (widgetId: string) =>
+  apiFetch<Lead[]>(`/api/v1/leads/list/${encodeURIComponent(widgetId)}`);
+
+// ---------------- Conversations ----------------
+export type ChatSessionRow = {
+  id: string;
+  widgetId: string;
+  visitorId: string | null;
+  createdAt: string;
+  messageCount?: number;
+  lastMessage?: string;
+};
+
+export type MessageRow = {
+  id: string;
+  sessionId: string;
+  role: "USER" | "AI" | "SYSTEM";
+  content: string;
+  sentiment: number | null;
+  needsAttention: boolean | null;
+  createdAt: string;
+};
+
+export const listSessions = (widgetId: string) =>
+  apiFetch<ChatSessionRow[]>(
+    `/api/v1/chat/sessions/${encodeURIComponent(widgetId)}`,
+  );
+
+export const listMessages = (sessionId: string) =>
+  apiFetch<MessageRow[]>(
+    `/api/v1/chat/messages/${encodeURIComponent(sessionId)}`,
+  );

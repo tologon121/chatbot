@@ -264,3 +264,55 @@ async def stream_message(req: ChatRequest, request: Request):
             "X-Accel-Buffering": "no",  # отключает буферизацию nginx
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Conversation history endpoints (for dashboard)
+# ---------------------------------------------------------------------------
+@router.get("/sessions/{widget_id}")
+async def list_sessions(widget_id: str):
+    """List chat sessions for a widget, newest first, with message_count + last_message."""
+    try:
+        sessions = (
+            supabase.table("ChatSession")
+            .select("*")
+            .eq("widgetId", widget_id)
+            .execute()
+            .data
+            or []
+        )
+        # Fetch all messages once and group by session in Python.
+        # (Real Postgres would use SELECT ... IN.)
+        all_msgs = supabase.table("Message").select("*").execute().data or []
+        by_session: dict[str, list[dict]] = {}
+        for m in all_msgs:
+            sid = m.get("sessionId")
+            if sid:
+                by_session.setdefault(sid, []).append(m)
+        for s in sessions:
+            msgs = by_session.get(s["id"], [])
+            msgs.sort(key=lambda x: x.get("createdAt") or "")
+            s["messageCount"] = len(msgs)
+            s["lastMessage"] = msgs[-1]["content"] if msgs else None
+        sessions.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
+        return sessions
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/messages/{session_id}")
+async def list_messages(session_id: str):
+    """List messages for a chat session, oldest first."""
+    try:
+        msgs = (
+            supabase.table("Message")
+            .select("*")
+            .eq("sessionId", session_id)
+            .execute()
+            .data
+            or []
+        )
+        msgs.sort(key=lambda x: x.get("createdAt") or "")
+        return msgs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

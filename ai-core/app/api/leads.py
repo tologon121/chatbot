@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
@@ -7,6 +8,7 @@ from app.services.integrations import process_lead_generation
 
 router = APIRouter()
 supabase = get_supabase()
+logger = logging.getLogger(__name__)
 
 
 class LeadRequest(BaseModel):
@@ -72,3 +74,32 @@ async def capture_lead(
     )
 
     return {"status": "success", "message": "Lead captured and being processed"}
+
+
+@router.get("/list/{widget_id}")
+async def list_leads(widget_id: str):
+    """Возвращает все лиды для виджета, новые сверху."""
+    try:
+        res = (
+            supabase.table("Lead")
+            .select("*")
+            .eq("widgetId", widget_id)
+            .execute()
+        )
+        leads = res.data or []
+        leads.sort(key=lambda x: x.get("createdAt") or "", reverse=True)
+        return leads
+    except Exception as e:
+        logger.error(f"Error listing leads for {widget_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{lead_id}")
+async def delete_lead(lead_id: str):
+    """Удаляет лид."""
+    try:
+        supabase.table("Lead").delete().eq("id", lead_id).execute()
+        return {"status": "success", "message": f"Lead {lead_id} deleted."}
+    except Exception as e:
+        logger.error(f"Error deleting lead {lead_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

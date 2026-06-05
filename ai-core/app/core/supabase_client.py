@@ -116,6 +116,27 @@ class _MockTable:
         return _MockResponse([])
 
 
+DEMO_WIDGET_KB = (
+    "О NEXUS AI:\n"
+    "Nexus AI — SaaS-платформа встраиваемых чат-ботов с RAG-поиском по "
+    "вашей базе знаний. Виджет добавляется одним тегом <script>, "
+    "работает в Shadow DOM и не ломает стили клиентского сайта.\n\n"
+    "ТАРИФЫ:\n"
+    "- Starter: $0/мес, до 1000 диалогов, базовый RAG.\n"
+    "- Pro: $49/мес, до 10000 диалогов, lead capture, RU/EN/KG.\n"
+    "- Enterprise: $199/мес, безлимит, white-label, SLA 99.9%.\n\n"
+    "ВОЗМОЖНОСТИ:\n"
+    "Мультиязычность, SSE-стриминг, lead-mode, persona, аналитика, "
+    "webhook-интеграции с AmoCRM/Bitrix24/Telegram.\n\n"
+    "БЫСТРЫЙ СТАРТ:\n"
+    "1) Зарегистрируйтесь.\n"
+    "2) Загрузите документы в Knowledge Base.\n"
+    "3) Вставьте сниппет перед </body>.\n\n"
+    "КОНТАКТЫ:\n"
+    "Email: support@nexusai.example.com, Telegram: @NexusAI_Support.\n"
+)
+
+
 class MockSupabaseClient:
     def __init__(self):
         self._store: dict[str, list[dict]] = {}
@@ -131,7 +152,7 @@ class MockSupabaseClient:
                 "position": "bottom-right",
                 "isActive": True,
                 "allowedDomains": [],
-                "persona": None,
+                "persona": "Ты дружелюбный демо-ассистент Nexus AI. Отвечай кратко (2-3 предложения), на основе предоставленного контекста.",
                 "greeting": "Здравствуйте! Я демо-ассистент Nexus AI. Чем могу помочь?",
                 "leadMode": True,
                 "webhookUrl": None,
@@ -168,15 +189,46 @@ class MockSupabaseClient:
                 "createdAt": "2026-01-01T00:00:00Z",
             },
         ]
-        safe_print("[MOCK Supabase] Initialized with 3 seed widgets")
+
+        # Pre-seed a demo document for wk_demo so /demo answers
+        # something meaningful out of the box (without manual upload).
+        demo_doc_id = "00000000-0000-0000-0000-000000000001"
+        self._store["Document"] = [
+            {
+                "id": demo_doc_id,
+                "widgetId": "wk_demo",
+                "title": "Nexus AI — quick facts",
+                "type": "RAW_TEXT",
+                "status": "READY",
+                "createdAt": "2026-01-01T00:00:00Z",
+            }
+        ]
+        # Split into rough paragraphs so the mock RPC returns several chunks
+        chunks = [p.strip() for p in DEMO_WIDGET_KB.split("\n\n") if p.strip()]
+        self._store["DocumentChunk"] = [
+            {
+                "id": f"00000000-0000-0000-0000-{i:012d}",
+                "documentId": demo_doc_id,
+                "content": chunk,
+                "embedding": None,
+            }
+            for i, chunk in enumerate(chunks, start=2)
+        ]
+        safe_print(
+            f"[MOCK Supabase] Seeded 3 widgets + demo KB "
+            f"({len(self._store['DocumentChunk'])} chunks)"
+        )
 
     def table(self, name: str) -> _MockTable:
         return _MockTable(self._store, name)
 
-    def rpc(self, name: str, params: dict) -> _MockResponse:
+    def rpc(self, name: str, params: dict):
         """
         Mock RAG retrieval: return up to match_count chunks for the widget,
         ignoring vector math. Lets the dashboard test the end-to-end flow.
+
+        Returns a builder with `.execute()` so it mirrors the real SDK shape
+        (`supabase.rpc(...).execute()`).
         """
         if name == "match_document_chunks":
             widget_id = params.get("p_widget_id")
@@ -192,8 +244,18 @@ class MockSupabaseClient:
                 for c in self._store.get("DocumentChunk", [])
                 if c.get("documentId") in doc_ids
             ][:match_count]
-            return _MockResponse(chunks)
-        return _MockResponse([])
+            return _RpcBuilder(_MockResponse(chunks))
+        return _RpcBuilder(_MockResponse([]))
+
+
+class _RpcBuilder:
+    """Tiny shim so callers can do `supabase.rpc(...).execute()` on the mock."""
+
+    def __init__(self, response: "_MockResponse"):
+        self._response = response
+
+    def execute(self) -> "_MockResponse":
+        return self._response
 
 
 # ---------------------------------------------------------------------------

@@ -51,7 +51,12 @@ export type NexusConfig = {
   title?: string;
 };
 
-const DEFAULT_API_URL = 'https://api.nexusai.example.com';
+// Allow CDN builds to bake in a default; otherwise fall back to the
+// example domain so the widget still throws a clear network error
+// instead of pretending to work.
+const DEFAULT_API_URL =
+  (import.meta.env?.VITE_NEXUS_API_URL as string | undefined) ||
+  'https://api.nexusai.example.com';
 const CONTAINER_ID = 'nexus-ai-widget-container';
 
 type WidgetController = {

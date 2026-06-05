@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { useLanguage } from "@/components/LanguageContext";
 
@@ -10,6 +11,12 @@ export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close drawer on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   const handleSignOut = async () => {
     await signOut({ redirect: false });
@@ -21,10 +28,62 @@ export default function Sidebar() {
       ? pathname === "/dashboard"
       : pathname?.startsWith(href);
 
-  return (
-    <aside className="w-64 shrink-0 h-screen bg-[var(--surface)] border-r border-[var(--border)] flex flex-col">
+  const navItems = (
+    <nav className="flex-1 px-3 py-4 overflow-y-auto">
+      <p className="px-3 mb-2 text-[10px] font-bold tracking-widest uppercase text-[var(--foreground-faint)]">
+        Workspace
+      </p>
+      <div className="space-y-0.5">
+        <NavItem
+          href="/dashboard"
+          label={t.sidebar.overview}
+          active={isActive("/dashboard") && pathname === "/dashboard"}
+          icon="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+        />
+        <NavItem
+          href="/dashboard/knowledge-base"
+          label={t.sidebar.knowledgeBase}
+          active={!!isActive("/dashboard/knowledge-base")}
+          icon="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+        />
+        <NavItem
+          href="/dashboard/widget-settings"
+          label={t.sidebar.widgetSettings}
+          active={!!isActive("/dashboard/widget-settings")}
+          icon="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z"
+        />
+        <NavItem
+          href="/dashboard/integration"
+          label={t.sidebar.integration || "Integration"}
+          active={!!isActive("/dashboard/integration")}
+          icon="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+        />
+        <NavItem
+          href="/dashboard/leads"
+          label="Лиды"
+          active={!!isActive("/dashboard/leads")}
+          icon="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+        />
+        <NavItem
+          href="/dashboard/conversations"
+          label="Диалоги"
+          active={!!isActive("/dashboard/conversations")}
+          icon="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+        />
+        <NavItem
+          href="/dashboard/analytics"
+          label={t.sidebar.analytics}
+          active={!!isActive("/dashboard/analytics")}
+          icon="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+        />
+      </div>
+    </nav>
+  );
+
+  const sidebarBody = (
+    <>
       {/* Logo */}
-      <div className="px-6 h-16 flex items-center border-b border-[var(--border)]">
+      <div className="px-6 h-16 flex items-center border-b border-[var(--border)] justify-between">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="relative w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 flex items-center justify-center shadow-[0_4px_12px_rgba(99,102,241,0.35)]">
             <span className="text-white font-bold text-[13px]">N</span>
@@ -34,46 +93,18 @@ export default function Sidebar() {
             Nexus<span className="text-gradient">AI</span>
           </span>
         </Link>
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="lg:hidden text-[var(--foreground-muted)] hover:text-[var(--foreground)] p-1 cursor-pointer border-none bg-transparent"
+          aria-label="Close menu"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-4 overflow-y-auto">
-        <p className="px-3 mb-2 text-[10px] font-bold tracking-widest uppercase text-[var(--foreground-faint)]">
-          Workspace
-        </p>
-        <div className="space-y-0.5">
-          <NavItem
-            href="/dashboard"
-            label={t.sidebar.overview}
-            active={isActive("/dashboard") && pathname === "/dashboard"}
-            icon="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-          />
-          <NavItem
-            href="/dashboard/knowledge-base"
-            label={t.sidebar.knowledgeBase}
-            active={!!isActive("/dashboard/knowledge-base")}
-            icon="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-          />
-          <NavItem
-            href="/dashboard/widget-settings"
-            label={t.sidebar.widgetSettings}
-            active={!!isActive("/dashboard/widget-settings")}
-            icon="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z"
-          />
-          <NavItem
-            href="/dashboard/integration"
-            label={t.sidebar.integration || "Integration"}
-            active={!!isActive("/dashboard/integration")}
-            icon="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
-          />
-          <NavItem
-            href="/dashboard/analytics"
-            label={t.sidebar.analytics}
-            active={!!isActive("/dashboard/analytics")}
-            icon="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-          />
-        </div>
-      </nav>
+      {navItems}
 
       {/* Footer */}
       <div className="p-3 border-t border-[var(--border)] space-y-2">
@@ -83,10 +114,10 @@ export default function Sidebar() {
             <button
               key={l}
               onClick={() => setLang(l)}
-              className={`flex-1 px-2 py-1 text-[11px] font-bold tracking-wider rounded-md transition-all ${
+              className={`flex-1 px-2 py-1 text-[11px] font-bold tracking-wider rounded-md transition-all cursor-pointer border-none ${
                 lang === l
                   ? "bg-[var(--surface)] text-[var(--foreground)] shadow-sm"
-                  : "text-[var(--foreground-faint)] hover:text-[var(--foreground-muted)]"
+                  : "text-[var(--foreground-faint)] hover:text-[var(--foreground-muted)] bg-transparent"
               }`}
             >
               {l}
@@ -94,10 +125,9 @@ export default function Sidebar() {
           ))}
         </div>
 
-        {/* Theme */}
         <button
           onClick={toggleTheme}
-          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-[13px] font-semibold rounded-lg border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-all"
+          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-[13px] font-semibold rounded-lg border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-hover)] text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-all cursor-pointer"
         >
           {theme === "dark" ? (
             <>
@@ -112,17 +142,14 @@ export default function Sidebar() {
           )}
         </button>
 
-        {/* User pill (if signed in) */}
         {session?.user && (
-          <div className="px-3 py-2 text-[11px] text-[var(--foreground-faint)] truncate"
-               title={session.user.email || ""}>
+          <div className="px-3 py-2 text-[11px] text-[var(--foreground-faint)] truncate" title={session.user.email || ""}>
             <span className="font-semibold text-[var(--foreground-muted)]">
               {session.user.name || session.user.email}
             </span>
           </div>
         )}
 
-        {/* Sign out */}
         <button
           onClick={handleSignOut}
           className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-[13px] font-semibold rounded-lg text-[var(--foreground-muted)] hover:text-red-500 hover:bg-red-500/5 transition-all cursor-pointer border-none bg-transparent"
@@ -131,7 +158,39 @@ export default function Sidebar() {
           {t.sidebar.signOut}
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile hamburger trigger */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="lg:hidden fixed top-3 left-3 z-30 w-10 h-10 rounded-lg bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center shadow-md cursor-pointer"
+        aria-label="Open menu"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — fixed on mobile (drawer), static on desktop */}
+      <aside
+        className={`fixed lg:static top-0 left-0 z-50 w-64 h-screen bg-[var(--surface)] border-r border-[var(--border)] flex flex-col shrink-0 transform transition-transform duration-300 ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
+      >
+        {sidebarBody}
+      </aside>
+    </>
   );
 }
 
