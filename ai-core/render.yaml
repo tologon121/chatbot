@@ -1,0 +1,42 @@
+# One-click deploy of Nexus AI Core to Render.
+#
+# Usage:
+#   1) Push this repo to GitHub.
+#   2) In Render dashboard → New → Blueprint → connect repo → pick this file.
+#   3) Render reads it, creates a web service, builds and deploys.
+#   4) Set the env vars listed under `envVars` in Render UI before first deploy
+#      (SUPABASE_*, OPENAI_API_KEY).
+#   5) Copy the resulting URL (https://nexus-ai-core.onrender.com) and set it
+#      as NEXT_PUBLIC_API_URL in your Vercel project.
+services:
+  - type: web
+    name: nexus-ai-core
+    runtime: python
+    plan: free
+    rootDir: ai-core
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8
+      - key: APP_VERSION
+        value: 1.2.0
+      - key: ALLOWED_ORIGINS
+        # Restrict CORS to your Vercel domain in production.
+        value: "https://chatbot-chi-three-81.vercel.app,http://localhost:3000"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "30"
+      - key: OPENAI_CHAT_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_EMBEDDING_MODEL
+        value: text-embedding-3-small
+      # Set these manually in Render dashboard (sync: false hides them from
+      # the blueprint commit so secrets don't end up in git):
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false

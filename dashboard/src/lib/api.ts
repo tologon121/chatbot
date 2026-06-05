@@ -32,21 +32,34 @@ export type DocumentRow = {
 };
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      ...(init?.body && !(init.body instanceof FormData)
-        ? { "Content-Type": "application/json" }
-        : {}),
-      ...(init?.headers || {}),
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers: {
+        ...(init?.body && !(init.body instanceof FormData)
+          ? { "Content-Type": "application/json" }
+          : {}),
+        ...(init?.headers || {}),
+      },
+    });
+  } catch (e: any) {
+    // Network error — most likely the AI Core URL is misconfigured.
+    throw new Error(
+      `Не удалось подключиться к AI Core (${API_BASE}). ` +
+        `Проверьте NEXT_PUBLIC_API_URL и доступность бэкенда.`,
+    );
+  }
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`;
     try {
       const j = await res.json();
       detail = j.detail || j.error || detail;
     } catch { /* ignore */ }
+    // Annotate 404s so the user sees what URL failed
+    if (res.status === 404) {
+      detail = `Эндпойнт не найден на бэкенде (${API_BASE}${path}). Возможно, ai-core ещё не задеплоен или версия устарела.`;
+    }
     throw new Error(detail);
   }
   return res.json() as Promise<T>;
