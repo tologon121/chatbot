@@ -101,7 +101,7 @@ function mount(cfg: NexusConfig): WidgetController {
     position: cfg.position || 'bottom-right',
     greeting: cfg.greeting || '',
     leadMode: cfg.leadMode ?? false,
-    title: cfg.title || 'Nexus AI',
+    title: cfg.title || 'AI Assistant',
   };
 
   // 1. Контейнер
