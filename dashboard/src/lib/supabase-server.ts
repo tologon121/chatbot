@@ -229,9 +229,8 @@ export const db = {
       return (data || []) as Widget[];
     }
     const store = getStore();
-    return store.Widget.filter((w) =>
-      ownerId ? w.ownerId === ownerId : true,
-    ) as Widget[];
+    if (!ownerId) return [];
+return store.Widget.filter((w) => w.ownerId === ownerId) as Widget[];
   },
 
   async getWidget(id: string): Promise<Widget | null> {
