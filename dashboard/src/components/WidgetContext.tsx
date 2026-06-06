@@ -1,5 +1,4 @@
 "use client";
-
 import {
   createContext,
   useCallback,
@@ -14,7 +13,6 @@ import {
   listWidgets,
 } from "@/lib/api";
 import { getSupabaseClient } from "@/lib/supabase";
-
 type WidgetCtx = {
   widgets: Widget[];
   currentId: string | null;
@@ -25,17 +23,13 @@ type WidgetCtx = {
   refresh: () => Promise<void>;
   createAndSelect: (name: string) => Promise<Widget | null>;
 };
-
 const Ctx = createContext<WidgetCtx | null>(null);
-
 const STORAGE_KEY = "nexus_current_widget_id";
-
 export function WidgetProvider({ children }: { children: React.ReactNode }) {
   const [widgets, setWidgets] = useState<Widget[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -44,7 +38,6 @@ export function WidgetProvider({ children }: { children: React.ReactNode }) {
       const { data: { user } } = await supabase.auth.getUser();
       const list = await listWidgets(user?.id);
       setWidgets(list);
-      // restore selection from localStorage if it still exists
       const saved =
         typeof window !== "undefined"
           ? localStorage.getItem(STORAGE_KEY)
@@ -58,18 +51,15 @@ export function WidgetProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }
   }, []);
-
   useEffect(() => {
     refresh();
   }, [refresh]);
-
   const select = useCallback((id: string) => {
     setCurrentId(id);
     try {
       localStorage.setItem(STORAGE_KEY, id);
     } catch { /* ignore */ }
   }, []);
-
   const createAndSelect = useCallback(
     async (name: string) => {
       try {
@@ -87,7 +77,6 @@ export function WidgetProvider({ children }: { children: React.ReactNode }) {
     },
     [select],
   );
-
   const value = useMemo<WidgetCtx>(
     () => ({
       widgets,
@@ -101,10 +90,8 @@ export function WidgetProvider({ children }: { children: React.ReactNode }) {
     }),
     [widgets, currentId, loading, error, select, refresh, createAndSelect],
   );
-
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
-
 export function useWidget() {
   const ctx = useContext(Ctx);
   if (!ctx)
