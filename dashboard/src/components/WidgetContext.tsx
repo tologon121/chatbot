@@ -13,6 +13,7 @@ import {
   createWidget as apiCreateWidget,
   listWidgets,
 } from "@/lib/api";
+import { getSupabaseClient } from "@/lib/supabase";
 
 type WidgetCtx = {
   widgets: Widget[];
@@ -39,7 +40,9 @@ export function WidgetProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const list = await listWidgets();
+      const supabase = getSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      const list = await listWidgets(user?.id);
       setWidgets(list);
       // restore selection from localStorage if it still exists
       const saved =
@@ -70,7 +73,9 @@ export function WidgetProvider({ children }: { children: React.ReactNode }) {
   const createAndSelect = useCallback(
     async (name: string) => {
       try {
-        const res = await apiCreateWidget({ name });
+        const supabase = getSupabaseClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        const res = await apiCreateWidget({ name, ownerId: user?.id });
         const w = res.widget;
         setWidgets((prev) => [...prev, w]);
         select(w.id);
