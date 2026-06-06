@@ -31,7 +31,7 @@ export default function IntegrationPage() {
     setGreeting(current.greeting || "");
   }, [current?.id]);
 
-  const widgetCdn = "https://cdn.nexusai.example.com/widget.iife.js";
+  const widgetCdn = "https://chatbot-chi-three-81.vercel.app/widget.js";
 
   const dataAttrs = useMemo(() => {
     const attrs: Record<string, string> = {
