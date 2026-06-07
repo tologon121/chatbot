@@ -1,10 +1,11 @@
 try:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
-except ImportError:  # старая версия пакета — фолбэк
+except ImportError:
     from langchain.text_splitter import RecursiveCharacterTextSplitter  # type: ignore
-from openai import OpenAI
+
+import google.generativeai as genai
 from app.core.config import (
-    OPENAI_API_KEY,
+    GEMINI_API_KEY,
     OPENAI_CHAT_MODEL,
     OPENAI_EMBEDDING_MODEL,
     EMBEDDING_DIMENSIONS,
@@ -18,7 +19,11 @@ import logging
 import random
 from typing import Generator, Iterable
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+# Gemini клиентти баштатуу
+_has_real_key = GEMINI_API_KEY and GEMINI_API_KEY != "your-gemini-key"
+if _has_real_key:
+    genai.configure(api_key=GEMINI_API_KEY)
+
 supabase = get_supabase()
 logger = logging.getLogger(__name__)
 
@@ -34,42 +39,37 @@ def _mock_embed(text: str) -> list[float]:
 
 
 def _embed(text: str) -> list[float]:
-    """Создает эмбеддинг для одной строки с актуальной моделью (с фолбэком)."""
-    if not OPENAI_API_KEY or OPENAI_API_KEY == "your-openai-key":
+    """Gemini embedding үчүн text-embedding-004 моделин колдонот."""
+    if not _has_real_key:
         return _mock_embed(text)
     try:
-        response = client.embeddings.create(
-            input=text,
+        result = genai.embed_content(
             model=OPENAI_EMBEDDING_MODEL,
+            content=text,
         )
-        return response.data[0].embedding
+        return result["embedding"]
     except Exception as e:
-        logger.warning(f"OpenAI embedding generation failed: {e}. Falling back to mock embedding.")
+        logger.warning(f"Gemini embedding failed: {e}. Falling back to mock embedding.")
         return _mock_embed(text)
 
 
 def _embed_batch(texts: list[str], batch_size: int = 100) -> list[list[float]]:
-    """Батч-эмбеддинги: один HTTP-вызов на 100 строк вместо 100 вызовов.
-    Драматически быстрее и дешевле при загрузке большого документа.
-    """
+    """Батч эмбеддинг — ар бир текст үчүн өзүнчө чалуу (Gemini batch API жок)."""
     if not texts:
         return []
-    if not OPENAI_API_KEY or OPENAI_API_KEY == "your-openai-key":
+    if not _has_real_key:
         return [_mock_embed(t) for t in texts]
     out: list[list[float]] = []
-    for i in range(0, len(texts), batch_size):
-        chunk = texts[i : i + batch_size]
+    for text in texts:
         try:
-            res = client.embeddings.create(
-                input=chunk,
+            result = genai.embed_content(
                 model=OPENAI_EMBEDDING_MODEL,
+                content=text,
             )
-            out.extend(item.embedding for item in res.data)
+            out.append(result["embedding"])
         except Exception as e:
-            logger.warning(
-                f"Batch embed failed (chunk {i}-{i+len(chunk)}): {e}. Mock fallback."
-            )
-            out.extend(_mock_embed(t) for t in chunk)
+            logger.warning(f"Gemini embed failed: {e}. Mock fallback.")
+            out.append(_mock_embed(text))
     return out
 
 
@@ -78,8 +78,8 @@ def _embed_batch(texts: list[str], batch_size: int = 100) -> list[list[float]]:
 # ---------------------------------------------------------------------------
 def process_and_store_document(document_id: str, widget_id: str, text: str) -> None:
     """
-    Фоновая задача: разбивает текст на чанки, генерирует эмбеддинги через OpenAI
-    и сохраняет их в векторную базу Supabase (pgvector).
+    Фондук тапшырма: текстти чанктарга бөлөт, Gemini аркылуу эмбеддинг жасайт,
+    Supabase pgvector'го сактайт.
     """
     try:
         text_splitter = RecursiveCharacterTextSplitter(
@@ -91,7 +91,6 @@ def process_and_store_document(document_id: str, widget_id: str, text: str) -> N
         if not chunks:
             raise ValueError("Empty document, nothing to ingest.")
 
-        # Batch all embeddings in one OpenAI call — ~50x faster.
         embeddings = _embed_batch(chunks)
 
         rows = [
@@ -108,9 +107,7 @@ def process_and_store_document(document_id: str, widget_id: str, text: str) -> N
         supabase.table("Document").update({"status": "READY"}).eq(
             "id", document_id
         ).execute()
-        logger.info(
-            f"Document {document_id} processed: {len(chunks)} chunks stored."
-        )
+        logger.info(f"Document {document_id} processed: {len(chunks)} chunks stored.")
 
     except Exception as e:
         logger.error(f"Error processing document {document_id}: {e}")
@@ -123,7 +120,7 @@ def process_and_store_document(document_id: str, widget_id: str, text: str) -> N
 # Retrieval
 # ---------------------------------------------------------------------------
 def _retrieve_context(widget_id: str, user_message: str) -> str:
-    """Векторный поиск релевантных чанков под запрос пользователя."""
+    """Векторлук издөө — колдонуучунун суроосуна туура чанктарды табат."""
     query_embedding = _embed(user_message)
 
     search_res = supabase.rpc(
@@ -159,43 +156,38 @@ Context from the knowledge base:
 
 
 # ---------------------------------------------------------------------------
-# Generation (non-streaming) — обратная совместимость с /send
+# Demo fallback
 # ---------------------------------------------------------------------------
 _DEMO_FALLBACK_REPLY = {
     "RU": (
-        "Демо-режим: OPENAI_API_KEY не настроен, поэтому я отвечаю "
+        "Демо-режим: GEMINI_API_KEY не настроен, поэтому я отвечаю "
         "шаблоном. Контекст из базы знаний найден — задайте конкретный "
         "вопрос, и в реальном виджете я отвечу по нему."
     ),
     "EN": (
-        "Demo mode: OPENAI_API_KEY isn't configured, so I'm replying with "
+        "Demo mode: GEMINI_API_KEY isn't configured, so I'm replying with "
         "a stub. Context was retrieved from the knowledge base — a live "
         "deployment would answer for real."
     ),
     "KG": (
-        "Демо-режим: OPENAI_API_KEY жок, ошондуктан шаблон менен жооп берем."
+        "Демо-режим: GEMINI_API_KEY жок, ошондуктан шаблон менен жооп берем."
     ),
 }
 
 
+# ---------------------------------------------------------------------------
+# Generation (non-streaming)
+# ---------------------------------------------------------------------------
 def generate_rag_response(
     widget_id: str,
     user_message: str,
     language: str,
     persona: str | None = None,
 ) -> dict:
-    """Генерирует один ответ RAG (non-streaming).
-
-    Если OPENAI_API_KEY не задан или OpenAI API падает — возвращает
-    дружелюбную demo-заглушку с контекстом из RAG-поиска, вместо ошибки 502.
-    """
     context = _retrieve_context(widget_id, user_message)
     sentiment = analyze_sentiment(user_message)
 
-    has_real_key = OPENAI_API_KEY and OPENAI_API_KEY != "your-openai-key"
-
-    if not has_real_key:
-        # Echo the retrieved context so /demo still feels alive.
+    if not _has_real_key:
         snippet = context[:400] if context else ""
         fallback = _DEMO_FALLBACK_REPLY.get(language, _DEMO_FALLBACK_REPLY["EN"])
         reply = f"{fallback}\n\n{snippet}" if snippet else fallback
@@ -207,17 +199,15 @@ def generate_rag_response(
 
     try:
         system_prompt = _build_system_prompt(context, language, persona)
-        chat_completion = client.chat.completions.create(
-            model=OPENAI_CHAT_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            temperature=RAG_TEMPERATURE,
+        model = genai.GenerativeModel(
+            model_name=OPENAI_CHAT_MODEL,
+            system_instruction=system_prompt,
+            generation_config={"temperature": RAG_TEMPERATURE},
         )
-        ai_message = chat_completion.choices[0].message.content or ""
+        response = model.generate_content(user_message)
+        ai_message = response.text or ""
     except Exception as e:
-        logger.warning(f"OpenAI chat completion failed: {e}. Falling back to demo reply.")
+        logger.warning(f"Gemini chat failed: {e}. Falling back to demo reply.")
         snippet = context[:400] if context else ""
         fallback = _DEMO_FALLBACK_REPLY.get(language, _DEMO_FALLBACK_REPLY["EN"])
         ai_message = f"{fallback}\n\n{snippet}" if snippet else fallback
@@ -230,7 +220,7 @@ def generate_rag_response(
 
 
 # ---------------------------------------------------------------------------
-# Generation (streaming) — для SSE-эндпоинта
+# Generation (streaming) — SSE үчүн
 # ---------------------------------------------------------------------------
 def stream_rag_response(
     widget_id: str,
@@ -238,40 +228,29 @@ def stream_rag_response(
     language: str,
     persona: str | None = None,
 ) -> Iterable[str]:
-    """
-    Генератор токенов для Server-Sent Events.
-    Yield-ит чистый текст; форматирование SSE делает эндпоинт.
-    Если OPENAI_API_KEY отсутствует — стримит demo-заглушку посимвольно.
-    """
     context = _retrieve_context(widget_id, user_message)
-    has_real_key = OPENAI_API_KEY and OPENAI_API_KEY != "your-openai-key"
 
-    if not has_real_key:
+    if not _has_real_key:
         snippet = context[:400] if context else ""
         fallback = _DEMO_FALLBACK_REPLY.get(language, _DEMO_FALLBACK_REPLY["EN"])
         text = f"{fallback}\n\n{snippet}" if snippet else fallback
-        # Stream word-by-word to simulate live typing
         for word in text.split(" "):
             yield word + " "
         return
 
     try:
         system_prompt = _build_system_prompt(context, language, persona)
-        stream = client.chat.completions.create(
-            model=OPENAI_CHAT_MODEL,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
-            ],
-            temperature=RAG_TEMPERATURE,
-            stream=True,
+        model = genai.GenerativeModel(
+            model_name=OPENAI_CHAT_MODEL,
+            system_instruction=system_prompt,
+            generation_config={"temperature": RAG_TEMPERATURE},
         )
+        stream = model.generate_content(user_message, stream=True)
         for chunk in stream:
-            delta = chunk.choices[0].delta.content if chunk.choices else None
-            if delta:
-                yield delta
+            if chunk.text:
+                yield chunk.text
     except Exception as e:
-        logger.warning(f"OpenAI streaming failed: {e}. Falling back to demo reply.")
+        logger.warning(f"Gemini streaming failed: {e}. Falling back to demo reply.")
         fallback = _DEMO_FALLBACK_REPLY.get(language, _DEMO_FALLBACK_REPLY["EN"])
         for word in fallback.split(" "):
             yield word + " "
@@ -291,7 +270,6 @@ POS_WORDS = (
 
 
 def analyze_sentiment(text: str) -> float:
-    """Облегченный rule-based сентимент (-1..1). Для прода — VADER/LLM."""
     text_lower = text.lower()
     if any(w in text_lower for w in NEG_WORDS):
         return -0.8
