@@ -1,22 +1,21 @@
 "use client";
-
 import { useState } from "react";
 import { useWidget } from "./WidgetContext";
-
 export default function WidgetPicker() {
   const { widgets, currentId, select, createAndSelect, loading } = useWidget();
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
-
   const handleCreate = async () => {
+    console.log("handleCreate called", newName);
     if (!newName.trim()) return;
+    console.log("creating widget:", newName.trim());
     const w = await createAndSelect(newName.trim());
+    console.log("created widget:", w);
     if (w) {
       setNewName("");
       setCreating(false);
     }
   };
-
   return (
     <div className="flex items-center gap-2">
       <span className="text-[11px] uppercase font-bold tracking-widest text-[var(--foreground-faint)] hidden sm:inline">
@@ -36,7 +35,6 @@ export default function WidgetPicker() {
           </option>
         ))}
       </select>
-
       {creating ? (
         <div className="flex items-center gap-1.5">
           <input
