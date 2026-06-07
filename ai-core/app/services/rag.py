@@ -7,8 +7,8 @@ from google import genai
 from google.genai import types
 from app.core.config import (
     GEMINI_API_KEY,
-    OPENAI_CHAT_MODEL,
-    OPENAI_EMBEDDING_MODEL,
+    GEMINI_CHAT_MODEL,
+    GEMINI_EMBEDDING_MODEL,
     EMBEDDING_DIMENSIONS,
     RAG_MATCH_THRESHOLD,
     RAG_MATCH_COUNT,
@@ -39,12 +39,12 @@ def _embed(text: str) -> list[float]:
         return _mock_embed(text)
     try:
         result = client.models.embed_content(
-            model="text-embedding-004",
+            model=GEMINI_EMBEDDING_MODEL,
             contents=text,
         )
         return result.embeddings[0].values
     except Exception as e:
-        logger.warning(f"Gemini embedding failed: {e}. Falling back to mock embedding.")
+        logger.warning(f"Gemini embedding failed: {e}. Falling back to mock.")
         return _mock_embed(text)
 
 
@@ -57,7 +57,7 @@ def _embed_batch(texts: list[str]) -> list[list[float]]:
     for text in texts:
         try:
             result = client.models.embed_content(
-                model="text-embedding-004",
+                model=GEMINI_EMBEDDING_MODEL,
                 contents=text,
             )
             out.append(result.embeddings[0].values)
@@ -79,7 +79,6 @@ def process_and_store_document(document_id: str, widget_id: str, text: str) -> N
             raise ValueError("Empty document, nothing to ingest.")
 
         embeddings = _embed_batch(chunks)
-
         rows = [
             {
                 "id": str(uuid.uuid4()),
@@ -151,7 +150,7 @@ def generate_rag_response(
     try:
         system_prompt = _build_system_prompt(context, language, persona)
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model=GEMINI_CHAT_MODEL,
             contents=user_message,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
@@ -183,7 +182,7 @@ def stream_rag_response(
     try:
         system_prompt = _build_system_prompt(context, language, persona)
         stream = client.models.generate_content_stream(
-            model="gemini-1.5-flash",
+            model=GEMINI_CHAT_MODEL,
             contents=user_message,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
