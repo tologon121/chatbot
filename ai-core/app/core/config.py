@@ -11,8 +11,8 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv(
 
 # ---------- Gemini ----------
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "your-gemini-key")
-OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gemini-1.5-flash")
-OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "models/text-embedding-004")
+GEMINI_CHAT_MODEL = os.getenv("GEMINI_CHAT_MODEL", "gemini-1.5-flash")
+GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "text-embedding-004")
 EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "768"))
 
 # ---------- RAG ----------
