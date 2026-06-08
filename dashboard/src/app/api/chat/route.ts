@@ -1,4 +1,4 @@
-import { OpenAI } from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -9,28 +9,19 @@ const SYSTEM_PROMPTS: Record<string, string> = {
   KG: "Сиз NexusAI SaaS платформасынын пайдалуу ИИ жардамчысысыз. Профессионалдуу, кыска жана сылык болуңуз.",
 };
 
-/**
- * Demo proxy endpoint.
- * 1) Если задан AI_CORE_URL (или NEXT_PUBLIC_API_URL) — проксирует запрос
- *    в FastAPI backend (правильный путь для прод: единая RAG-логика).
- *    При необходимости автоматически создает сессию (POST /chat/session).
- * 2) Иначе — fallback на прямой OpenAI-вызов (для local dev).
- * 3) Если ни то, ни другое не настроено — возвращает дружелюбную
- *    демо-заглушку, чтобы /demo не "падал" в проде с placeholder ключом.
- */
 const DEMO_RESPONSES: Record<string, string[]> = {
   RU: [
-    "Я демо-ассистент Nexus AI 🚀. Настройте OPENAI_API_KEY или AI_CORE_URL, и я начну отвечать как настоящий бот.",
-    "Это демо-режим. Полная версия использует RAG-поиск по вашей базе знаний и GPT-4o-mini.",
+    "Я демо-ассистент Nexus AI 🚀. Настройте GEMINI_API_KEY или AI_CORE_URL, и я начну отвечать как настоящий бот.",
+    "Это демо-режим. Полная версия использует RAG-поиск по вашей базе знаний и Gemini Flash.",
     "Спасибо за вопрос! В реальном виджете я бы поискал ответ в загруженных документах и ответил по делу.",
   ],
   EN: [
-    "I'm the Nexus AI demo assistant 🚀. Configure OPENAI_API_KEY or AI_CORE_URL to get real answers.",
+    "I'm the Nexus AI demo assistant 🚀. Configure GEMINI_API_KEY or AI_CORE_URL to get real answers.",
     "This is demo mode. The full version uses RAG search over your knowledge base.",
     "Thanks for the question! A live widget would search uploaded docs and answer for real.",
   ],
   KG: [
-    "Мен Nexus AI демо жардамчысымын 🚀. OPENAI_API_KEY же AI_CORE_URL орнотуңуз.",
+    "Мен Nexus AI демо жардамчысымын 🚀. GEMINI_API_KEY же AI_CORE_URL орнотуңуз.",
     "Бул демо режим. Толук версия RAG издөөнү колдонот.",
     "Сурооңуз үчүн рахмат! Реалдуу виджет документтерден жооп издейт.",
   ],
@@ -97,25 +88,28 @@ export async function POST(req: Request) {
     }
   }
 
-  // --- 2. fallback: direct OpenAI ---
-  if (process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.includes("your-openai")) {
+  // --- 2. fallback: direct Gemini ---
+  if (process.env.GEMINI_API_KEY) {
     try {
-      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const response = await openai.chat.completions.create({
-        model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content:
-              SYSTEM_PROMPTS[lang as keyof typeof SYSTEM_PROMPTS] || SYSTEM_PROMPTS.EN,
-          },
-          ...messages,
-        ],
-        temperature: 0.7,
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash",
+        systemInstruction:
+          SYSTEM_PROMPTS[lang as keyof typeof SYSTEM_PROMPTS] || SYSTEM_PROMPTS.EN,
       });
-      return NextResponse.json({ text: response.choices[0].message.content });
+
+      const history = messages.slice(0, -1).map((m: { role: string; content: string }) => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }],
+      }));
+
+      const chat = model.startChat({ history });
+      const result = await chat.sendMessage(lastMsg);
+      const text = result.response.text();
+
+      return NextResponse.json({ text });
     } catch (error: unknown) {
-      console.error("OpenAI Error:", error);
+      console.error("Gemini Error:", error);
     }
   }
 
